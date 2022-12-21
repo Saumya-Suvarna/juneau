@@ -15,12 +15,13 @@
 """
 Main entry point for the server extension.
 """
-
+import os
 from notebook.utils import url_path_join
 from juneau.config import config
-from juneau.handler.handler import JuneauHandler
+from juneau.handler.handler import JuneauHandler, AuthHandler, AuthCallback
 from juneau.search.search_cases import WithProv_Cached
 from juneau.schemamapping.schemamapping import SchemaMapping
+from juneau.auth.authorization import Auth
 
 
 def load_jupyter_server_extension(nb_server_app):
@@ -38,6 +39,9 @@ def load_jupyter_server_extension(nb_server_app):
     web_app.nb_cell_id_node = {}
     web_app.search_test_class = WithProv_Cached(config.sql.dbs)
     web_app.schema_mapping_class = SchemaMapping()
+    web_app.session_info = {}
     route_pattern = url_path_join(web_app.settings["base_url"], "/juneau")
-    web_app.add_handlers(".*$", [(route_pattern, JuneauHandler)])
+    auth_pattern = url_path_join(web_app.settings["base_url"], "/oauth")
+    auth_cb_pattern = url_path_join(web_app.settings["base_url"], "/oauthcb")
+    web_app.add_handlers(".*$", [(route_pattern, JuneauHandler), (auth_pattern, AuthHandler), (auth_cb_pattern, AuthCallback)])
     nb_server_app.log.info("Juneau extension loaded.")

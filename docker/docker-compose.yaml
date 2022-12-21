@@ -26,6 +26,7 @@ services:
       - SQL_HOST=postgres
       - NEO_HOST=neo4j:7474
       - NEO_PASSWORD=example_password
+      - OAUTHLIB_INSECURE_TRANSPORT=1
     depends_on:
       - neo4j
       - postgres

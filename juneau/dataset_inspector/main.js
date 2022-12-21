@@ -81,6 +81,21 @@ define([
     st.extension_initialized = false;
     st.code_init = "";
 
+    function display_user_status() {
+        const userTarget = document.getElementById('oauth_button');
+        if (userTarget) {
+            var cookie_auth = getCookie("auth_state")
+            var is_authenticated = cookie_auth === "authenticated" ? "Authenticated" : "Not Authenticated"
+            var txt = document.createTextNode(` Status: ${is_authenticated}`);
+            userTarget.addEventListener('mouseover', (e) => {
+                userTarget.appendChild(txt);
+            });
+            userTarget.addEventListener('mouseout', (e) => {
+                userTarget.removeChild(txt);
+            });
+        }
+    }
+
     function read_config(name, cfg, callback) { // read after nb is loaded
         var config = Jupyter.notebook.config;
         config.loaded.then(function() {
@@ -141,6 +156,22 @@ define([
             ])).find('.btn').attr('id', 'dataset_inspector_button');
         }
     };
+    var oauth_button = function() {
+        if (!Jupyter.toolbar) {
+            events.on("app_initialized.NotebookApp", oauth_button);
+            return;
+        }
+        if ($("#oauth_button").length === 0) {
+            $(Jupyter.toolbar.add_buttons_group([
+                Jupyter.keyboard_manager.actions.register ({
+                    'help'   : 'Authenticates User',
+                    'icon'   : 'fa-user-circle',
+                    'handler': triggerOauth,
+                }, 'auth-notebook', 'oauth')
+            ])).find('.btn').attr('id', 'oauth_button');
+        }
+    };
+
 
     var load_css = function() {
         var link = document.createElement("link");
@@ -243,6 +274,9 @@ define([
     function getCookie(name) {
         var r = document.cookie.match("\\b" + name + "=([^;]*)\\b");
         return r ? r[1] : undefined;
+    }
+    function setCookie(name,value) {
+        document.cookie = name + "=" + (value || "")  + "; path=/";
     }
 
     // show returned tables
@@ -850,9 +884,52 @@ define([
         });
     };
 
+    function triggerOauth() {
+    var send_url = utils.url_path_join(Jupyter.notebook.base_url, '/oauth');
+    var data_json = {"_xsrf": getCookie("_xsrf")};
+    var return_state = ""
+    var return_url = ""
+    var return_error = ""
+    var return_session_id = ""
+    $.ajax({
+        url: send_url,
+        type: 'POST',
+        data: data_json,
+        dataType: 'json',
+        timeout: 100000,
+        success : function (response) {
+            return_state = response['auth_state'];
+            return_url = response['auth_url'];
+            return_error = response['error'];
+            return_session_id = response['auth_session_id'];
+            if(return_error === ''){
+                var auth_url = return_url.toString();
+                setCookie("auth_session_id", return_session_id);
+                setCookie("auth_state", return_state);
+                setCookie("auth_redirect",window.location.href.toString());
+                // var url = "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=1068315933462-p9gf2nkh6qp0e57h6s85m3pit59bp2kk.apps.googleusercontent.com&redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Foauth2&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email&state=vTHGoQJ13HEL7JE8Is5lkAy6LAqSvH&access_type=offline&prompt=select_account&include_granted_scopes=true"
+                //window.open(auth_url,'popUpWindow','height=500,width=500,left=100,top=100,resizable=yes,scrollbars=yes,toolbar=yes,menubar=no,location=no,directories=no, status=yes');
+                window.location.href = auth_url
+             } else if (response['error']) {
+                alert("Error occured while trying to authenticate: " + response['error']);
+            }
+            else{
+                alert("Could not complete auth");
+            }
+        },
+        error: function (request, error) {
+            console.log(arguments);
+            alert("Could not complete auth because: " + error);
+        }
+    });
+   }
+
+
     var load_jupyter_extension = function() {
         load_css(); //console.log("Loading css")
         dataset_inspector_button(); //console.log("Adding dataset_inspector_button")
+        oauth_button();
+        display_user_status();
 
         // If a kernel is available, 
         if (typeof Jupyter.notebook.kernel !== "undefined" && Jupyter.notebook.kernel !== null) {

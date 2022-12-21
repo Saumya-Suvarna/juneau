@@ -14,9 +14,11 @@
 
 import json
 import logging
+import os
 
 import pandas as pd
 from notebook.base.handlers import IPythonHandler
+from notebook.utils import url_path_join
 
 from juneau.config import config
 from juneau.db.table_db import connect2db_engine, connect2gdb
@@ -25,6 +27,11 @@ from juneau.search.search import search_tables
 from juneau.store.variable import Var_Info
 from juneau.store.store_func import Storage
 from juneau.search.query import Query
+from juneau.store.store_auth import UserInfoStorage
+import google.oauth2.credentials
+import google_auth_oauthlib.flow
+import googleapiclient.discovery
+import googleapiclient.errors as errors
 
 class JuneauHandler(IPythonHandler):
     """
@@ -165,3 +172,118 @@ class JuneauHandler(IPythonHandler):
                 self.data_trans = {"error": output, "state": False}
                 self.write(json.dumps(self.data_trans))
 
+
+class AuthCallback(IPythonHandler):
+    def initialize(self):
+        self.cred_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "credentials.json"
+        )
+        self.scopes = ['openid', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email']
+        self.full_url= self.request.full_url()
+        self.data_trans = {}
+
+    def get(self):
+        logging.info(f"Reached the authentication callback function")
+        auth_state = ""
+        if not self.get_cookie("auth_session_id") or not self.get_cookie("auth_state"):
+            self.write("Session does not exist in cookie. Could not authenticate.")
+            return
+        else:
+            session_id  = self.get_cookie("auth_session_id")
+            logging.info(session_id)
+            session_id = session_id[0]
+            auth_state  = self.get_cookie("auth_state")
+
+            # if session_vals == "":
+            #     self.write("Session does not exist. Could not authenticate.")
+            #     return
+            # else:
+            #     state = session_vals.get('auth_state',"")
+            # session_vals = self.session_dict[session_id] 
+            
+            if auth_state == "":
+                self.write("State does not exist. Could not authenticate.")
+                return
+            logging.info(" callback State")
+            logging.info(auth_state)
+            try:
+                flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
+                    self.cred_path, scopes=self.scopes, state=auth_state)
+                flow.redirect_uri = "http://127.0.0.1:8888/oauthcb"
+                authorization_response = self.full_url
+                logging.info(authorization_response)
+                flow.fetch_token(authorization_response=authorization_response)
+                credentials = flow.credentials
+                # session_vals['credentials'] = {'token': credentials.token,
+                #     'refresh_token': credentials.refresh_token,
+                #     'token_uri': credentials.token_uri,
+                #     'client_id': credentials.client_id,
+                #     'client_secret': credentials.client_secret,
+                #     'scopes': credentials.scopes}
+            except Exception as err:
+                self.write("Error while authentication: " + str(err))
+                return
+            user_info_service = googleapiclient.discovery.build(
+                serviceName='oauth2', version='v2', credentials=credentials, cache_discovery=False)
+            user_info = None
+            try:
+                user_info = user_info_service.userinfo().get().execute()
+            except Exception as err:
+                self.write("Error while getting user info: " + str(err))
+                return
+            usr = UserInfoStorage()
+            usr.add_update_user(
+                user_info["id"],
+                user_info["email"],
+                user_info["name"],
+                user_info["given_name"],
+                credentials.token,
+            )
+            self.set_cookie("auth_state", "authenticated")
+            self.write("Authenication complete")
+            self.redirect(self.get_cookie("auth_redirect"))
+
+
+
+class AuthHandler(IPythonHandler):
+    def initialize(self):
+        self.cred_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "credentials.json"
+        )
+        self.scopes = ['openid', 'https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email']
+        self.full_url= self.request.full_url()
+        self.data_trans = {}
+        
+
+
+    def post(self):
+        logging.info(f"Starting Authorization")
+        session_id = -1
+        if not self.get_cookie("auth_session_id"):
+            session_id = 1# str(len(self.application.session_info) + 1)
+           # self.application.session_info[session_id] = {}
+            self.set_cookie("auth_session_id", str(session_id))
+            logging.info("new sess id",session_id)
+        else:
+            session_id = self.get_cookie("auth_session_id")
+            session_id = session_id[0]
+            logging.info("auth session id")
+            logging.info(str(session_id[0]))
+        try:
+            flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(self.cred_path, scopes=self.scopes)
+            flow.redirect_uri = "http://127.0.0.1:8888/oauthcb" #url_path_join(self.base_url, 'oauth')
+            #print(url_path_join("http://", self.settings.get('ip', '127.0.0.1'),":", self.settings.get('port', '8888'), self.settings.get('base_url', '/'), 'oauth'))
+            authorization_url, state = flow.authorization_url(
+                access_type='offline',
+                prompt = 'select_account',
+                include_granted_scopes='true')
+            logging.info(" post State")
+            logging.info(state)
+            self.data_trans = {"error": "", "auth_state": state, "auth_url": authorization_url, "auth_session_id": session_id}
+            self.write(json.dumps(self.data_trans))
+        except Exception as err:
+            logging.error(f"Error occured while trying to authenticate", err)
+            self.data_trans = {"error": str(err), "auth_state": "", "auth_url": "", "auth_session_id":""}
+            self.write(json.dumps(self.data_trans))
+
+        

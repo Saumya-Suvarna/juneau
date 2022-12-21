@@ -1,28 +1,29 @@
 sql:
-  name: ${env:SQL_NAME,postgres}
-  password: ${env:SQL_PASSWORD,habitat1}
-  dbname: ${env:SQL_DBNAME,postgres}
-  host: ${env:SQL_HOST, postgres}
-  graph: ${env:SQL_GRAPH,graph_model}
-  provenance: ${env:SQL_PROVENANCE,nb_provenance}
-  dbs: ${env:SQL_DBS,rowstore}
-  ports: ${env:SQL_PORTS, 5432}
+  name: ${oc.env:SQL_NAME,postgres}
+  password: ${oc.env:SQL_PASSWORD,habitat1}
+  dbname: ${oc.env:SQL_DBNAME,postgres}
+  host: ${oc.env:SQL_HOST, postgres}
+  graph: ${oc.env:SQL_GRAPH,graph_model}
+  auth: ${oc.env:SQL_AUTH,graph_model}
+  provenance: ${oc.env:SQL_PROVENANCE,nb_provenance}
+  dbs: ${oc.env:SQL_DBS,rowstore}
+  ports: ${oc.env:SQL_PORTS, 5432}
 neo:
-  name: ${env:NEO_NAME,neo4j}
-  password: ${env:NEO_PASSWORD,example_password}
-  host: ${env:NEO_HOST,localhost:7474}
-  db: ${env:NEO_DB,data}
+  name: ${oc.env:NEO_NAME,neo4j}
+  password: ${oc.env:NEO_PASSWORD,example_password}
+  host: ${oc.env:NEO_HOST,localhost:7474}
+  db: ${oc.env:NEO_DB,data}
 lshe:
-  max_k: ${env:LSHE_MAX_K,4}
-  num_hash: ${env:LSHE_NUM_HASH,256}
-  num_part: ${env:LSHE_NUM_PART,32}
-  corpus_sig: ${env:LSHE_CORPUS_SIG,test_sig}
-  corpus_hash: ${env:LSHE_CORPUS_HASH,test_hash}
-  q_sig: ${env:LSHE_Q_SIG,test_q_sig}
-  q_hash: ${env:LSHE_Q_HASH,test_q_hash}
+  max_k: ${oc.env:LSHE_MAX_K,4}
+  num_hash: ${oc.env:LSHE_NUM_HASH,256}
+  num_part: ${oc.env:LSHE_NUM_PART,32}
+  corpus_sig: ${oc.env:LSHE_CORPUS_SIG,test_sig}
+  corpus_hash: ${oc.env:LSHE_CORPUS_HASH,test_hash}
+  q_sig: ${oc.env:LSHE_Q_SIG,test_q_sig}
+  q_hash: ${oc.env:LSHE_Q_HASH,test_q_hash}
 ks:
-  corpus: ${env:KS_CORPUS,utils}
+  corpus: ${oc.env:KS_CORPUS,utils}
 topk:
-  return_table_num: ${env:TOPK_RETURN_TABLE_NUM,10}
-  schema_ra_states: ${env:TOPK_SCHEMA_RA_STATES,topk_ra_states}
-  schema_sa_states: ${env:TOPK_SCHEMA_SA_STATES,topk_sa_states}
+  return_table_num: ${oc.env:TOPK_RETURN_TABLE_NUM,10}
+  schema_ra_states: ${oc.env:TOPK_SCHEMA_RA_STATES,topk_ra_states}
+  schema_sa_states: ${oc.env:TOPK_SCHEMA_SA_STATES,topk_sa_states}

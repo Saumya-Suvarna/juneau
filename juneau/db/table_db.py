@@ -47,6 +47,7 @@ def create_tables_as_needed(engine):
     eng.execute(f"create schema if not exists {config.sql.dbs};")
     eng.execute(f"create schema if not exists {config.sql.graph};")
     eng.execute(f"create schema if not exists {config.sql.provenance};")
+    eng.execute(f"create schema if not exists {config.sql.auth};")
 
     eng.execute(
         f"CREATE TABLE IF NOT EXISTS {config.sql.graph}.dependen (view_id character varying(1000), view_cmd text);"
@@ -59,7 +60,10 @@ def create_tables_as_needed(engine):
     eng.execute(
         f"CREATE TABLE IF NOT EXISTS {config.sql.graph}.lastliid (view_id character varying(1000), view_cmd text);"
     )
-
+    eng.execute(
+        f"CREATE TABLE IF NOT EXISTS {config.sql.auth}.userinfo (user_id character varying(1000), email character varying(1000), \
+        name character varying(1000), given_name character varying(1000), token character varying(1000));"
+    )
     session.commit()
     session.close()
 

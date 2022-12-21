@@ -13,7 +13,7 @@ setup(
     description="Data Extension for Jupyter notebook",
     packages=find_packages(),
     include_package_data=True,
-    python_requires='>=3.6',
+    python_requires='==3.9.7', # freezing python version because of backward compatibility issue after 3.11
     url="https://juneau.readthedocs.io/",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -43,7 +43,7 @@ setup(
         "juneau/db/table_db.py",
     ],
     install_requires=[
-        "py2neo==5.0b1",  # Incompatible for versions pre 4.3.0
+        "py2neo==2021.2.3",  # Incompatible for versions pre 4.3.0
         "psycopg2",
         "SQLAlchemy",
         "networkx",
@@ -51,7 +51,11 @@ setup(
         "pandas",
         "jupyter_client",
         "notebook",
-        "omegaconf"
+        "omegaconf",
+        "usaddress",
+        "google-api-python-client",
+        "google-auth-oauthlib==0.5.3",
+        "requests"
     ],
     extras_require={
         "dev": [
