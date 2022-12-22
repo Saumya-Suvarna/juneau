@@ -85,7 +85,7 @@ define([
         const userTarget = document.getElementById('oauth_button');
         if (userTarget) {
             var cookie_auth = getCookie("auth_state")
-            var is_authenticated = cookie_auth === "authenticated" ? "Authenticated" : "Not Authenticated"
+            var is_authenticated = cookie_auth === "Authenticated" ? "Authenticated" : "Not Authenticated"
             var txt = document.createTextNode(` Status: ${is_authenticated}`);
             userTarget.addEventListener('mouseover', (e) => {
                 userTarget.appendChild(txt);
@@ -902,7 +902,7 @@ define([
             return_url = response['auth_url'];
             return_error = response['error'];
             return_session_id = response['auth_session_id'];
-            if(return_error === ''){
+            if(return_error === '' && return_state === "In Progress"){
                 var auth_url = return_url.toString();
                 setCookie("auth_session_id", return_session_id);
                 setCookie("auth_state", return_state);
@@ -910,8 +910,10 @@ define([
                 // var url = "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=1068315933462-p9gf2nkh6qp0e57h6s85m3pit59bp2kk.apps.googleusercontent.com&redirect_uri=http%3A%2F%2F127.0.0.1%3A8888%2Foauth2&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email&state=vTHGoQJ13HEL7JE8Is5lkAy6LAqSvH&access_type=offline&prompt=select_account&include_granted_scopes=true"
                 //window.open(auth_url,'popUpWindow','height=500,width=500,left=100,top=100,resizable=yes,scrollbars=yes,toolbar=yes,menubar=no,location=no,directories=no, status=yes');
                 window.location.href = auth_url
-             } else if (response['error']) {
+             } else if (return_error || return_state === "Failed") {
                 alert("Error occured while trying to authenticate: " + response['error']);
+            } else if(return_state === "Authenticated"){
+                alert("User is already authenticated");
             }
             else{
                 alert("Could not complete auth");

@@ -15,6 +15,8 @@
 import json
 import logging
 import os
+import datetime
+import time
 
 import pandas as pd
 from notebook.base.handlers import IPythonHandler
@@ -185,41 +187,36 @@ class AuthCallback(IPythonHandler):
     def get(self):
         logging.info(f"Reached the authentication callback function")
         auth_state = ""
-        if not self.get_cookie("auth_session_id") or not self.get_cookie("auth_state"):
-            self.write("Session does not exist in cookie. Could not authenticate.")
+        if not self.get_cookie("auth_session_id"):
+            self.write("Session id does not exist in cookie. Could not authenticate.")
             return
         else:
-            session_id  = self.get_cookie("auth_session_id")
-            logging.info(session_id)
-            session_id = session_id[0]
-            auth_state  = self.get_cookie("auth_state")
-
-            # if session_vals == "":
-            #     self.write("Session does not exist. Could not authenticate.")
-            #     return
-            # else:
-            #     state = session_vals.get('auth_state',"")
-            # session_vals = self.session_dict[session_id] 
-            
+            session_id  = self.get_cookie("auth_session_id")[0]
+            session_vals = self.application.session_info.get(session_id,"")
+            if session_vals == "":
+                self.write("Session does not exist. Could not authenticate.")
+                return
+            auth_state = session_vals.get('auth_state',"")
             if auth_state == "":
                 self.write("State does not exist. Could not authenticate.")
                 return
-            logging.info(" callback State")
-            logging.info(auth_state)
             try:
                 flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
                     self.cred_path, scopes=self.scopes, state=auth_state)
-                flow.redirect_uri = "http://127.0.0.1:8888/oauthcb"
+                flow.redirect_uri = url_path_join("http://" + self.settings.get('ip', '127.0.0.1')+":"+self.settings.get('port', '8888'), self.settings.get('base_url', '/'), 'oauthcb')
                 authorization_response = self.full_url
-                logging.info(authorization_response)
                 flow.fetch_token(authorization_response=authorization_response)
                 credentials = flow.credentials
-                # session_vals['credentials'] = {'token': credentials.token,
-                #     'refresh_token': credentials.refresh_token,
-                #     'token_uri': credentials.token_uri,
-                #     'client_id': credentials.client_id,
-                #     'client_secret': credentials.client_secret,
-                #     'scopes': credentials.scopes}
+                session_vals['credentials'] = {
+                    'token': credentials.token,
+                    'refresh_token': credentials.refresh_token,
+                    'token_uri': credentials.token_uri,
+                    'client_id': credentials.client_id,
+                    'client_secret': credentials.client_secret,
+                    'scopes': credentials.scopes,
+                    'expiry': credentials.expiry
+                    }
+                self.application.session_info[session_id] = session_vals
             except Exception as err:
                 self.write("Error while authentication: " + str(err))
                 return
@@ -232,14 +229,13 @@ class AuthCallback(IPythonHandler):
                 self.write("Error while getting user info: " + str(err))
                 return
             usr = UserInfoStorage()
-            usr.add_update_user(
-                user_info["id"],
-                user_info["email"],
-                user_info["name"],
-                user_info["given_name"],
-                credentials.token,
-            )
-            self.set_cookie("auth_state", "authenticated")
+            try:
+                usr.add_update_user(user_info["id"],user_info["email"],user_info["name"],
+                    user_info["given_name"],credentials.token)
+            except Exception as err:
+                logging.error("Error while inserting user info into table: " + str(err))
+                return
+            self.set_cookie("auth_state", "Authenticated")
             self.write("Authenication complete")
             self.redirect(self.get_cookie("auth_redirect"))
 
@@ -254,36 +250,72 @@ class AuthHandler(IPythonHandler):
         self.full_url= self.request.full_url()
         self.data_trans = {}
         
-
+    # Refresh token: If the session information exists, refresh the token without
+    def refresh_token(self, client_id, refresh_token, client_secret):
+        params = {
+                "grant_type": "refresh_token",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token
+        }
+        authorization_url = "https://oauth2.googleapis.com/token"
+        try:
+            r = requests.post(authorization_url, data=params)
+            if r.ok:
+                    return r.json()['access_token']
+            else:
+                return None
+        except Exception as err:
+            logging.info(f"Error occured while trying to refresh token: {err}")
+            return None
 
     def post(self):
         logging.info(f"Starting Authorization")
         session_id = -1
+        # if a session id exists for the current session, use it otherwise create a new session
         if not self.get_cookie("auth_session_id"):
-            session_id = 1# str(len(self.application.session_info) + 1)
-           # self.application.session_info[session_id] = {}
+            session_id = str(len(self.application.session_info) + 1)
             self.set_cookie("auth_session_id", str(session_id))
-            logging.info("new sess id",session_id)
         else:
-            session_id = self.get_cookie("auth_session_id")
-            session_id = session_id[0]
-            logging.info("auth session id")
-            logging.info(str(session_id[0]))
+            session_id = self.get_cookie("auth_session_id")[0]
+
+        if session_id not in self.application.session_info:
+            self.application.session_info[session_id] = {}
+        # if entry exists in session_info dict, check if needed to refresh token
+        elif "credentials" in self.application.session_info[session_id]:
+            creds = self.application.session_info[session_id]["credentials"]
+            if "expiry" in creds and creds["expiry"] < datetime.datetime.now():
+                try:
+                    access_token = self.refresh_token(creds["client_id"], creds["refresh_token"], creds["client_secret"])
+                    creds["token"] = access_token
+                    self.application.session_info[session_id]["credentials"] = creds
+                    self.set_cookie("auth_state", "Authenticated")
+                    self.data_trans = {"error": "", "auth_state": "Authenticated", "auth_url": "", "auth_session_id": session_id}
+                except Exception as err:
+                    logging.error("Could not refresh token")
+                    self.set_cookie("auth_state", "Failed")
+                    self.data_trans = {"error": "Could not refresh token", "auth_state": "Failed", "auth_url": "", "auth_session_id": session_id}
+                self.write(json.dumps(self.data_trans))
+                return
+            elif "expiry" in creds and creds["expiry"] > datetime.datetime.now():
+                self.set_cookie("auth_state", "Authenticated")
+                self.data_trans = {"error": "", "auth_state": "Authenticated", "auth_url": "", "auth_session_id": session_id}
+                self.write(json.dumps(self.data_trans))
+                return           
         try:
+            # start the oauth flow
             flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(self.cred_path, scopes=self.scopes)
-            flow.redirect_uri = "http://127.0.0.1:8888/oauthcb" #url_path_join(self.base_url, 'oauth')
-            #print(url_path_join("http://", self.settings.get('ip', '127.0.0.1'),":", self.settings.get('port', '8888'), self.settings.get('base_url', '/'), 'oauth'))
+            flow.redirect_uri = url_path_join("http://"+ self.settings.get('ip', '127.0.0.1')+":"+self.settings.get('port', '8888'), self.settings.get('base_url', '/'), 'oauthcb')
             authorization_url, state = flow.authorization_url(
                 access_type='offline',
                 prompt = 'select_account',
                 include_granted_scopes='true')
-            logging.info(" post State")
-            logging.info(state)
-            self.data_trans = {"error": "", "auth_state": state, "auth_url": authorization_url, "auth_session_id": session_id}
+            self.application.session_info[session_id]["auth_state"] = state
+            self.data_trans = {"error": "", "auth_state": "In Progress", "auth_url": authorization_url, "auth_session_id": session_id}
             self.write(json.dumps(self.data_trans))
         except Exception as err:
             logging.error(f"Error occured while trying to authenticate", err)
-            self.data_trans = {"error": str(err), "auth_state": "", "auth_url": "", "auth_session_id":""}
+            self.data_trans = {"error": str(err), "auth_state": "Failed", "auth_url": "", "auth_session_id":session_id}
             self.write(json.dumps(self.data_trans))
 
         

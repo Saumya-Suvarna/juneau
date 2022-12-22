@@ -21,7 +21,6 @@ from juneau.config import config
 from juneau.handler.handler import JuneauHandler, AuthHandler, AuthCallback
 from juneau.search.search_cases import WithProv_Cached
 from juneau.schemamapping.schemamapping import SchemaMapping
-from juneau.auth.authorization import Auth
 
 
 def load_jupyter_server_extension(nb_server_app):

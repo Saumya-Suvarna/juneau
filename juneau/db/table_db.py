@@ -61,8 +61,7 @@ def create_tables_as_needed(engine):
         f"CREATE TABLE IF NOT EXISTS {config.sql.graph}.lastliid (view_id character varying(1000), view_cmd text);"
     )
     eng.execute(
-        f"CREATE TABLE IF NOT EXISTS {config.sql.auth}.userinfo (user_id character varying(1000), email character varying(1000), \
-        name character varying(1000), given_name character varying(1000), token character varying(1000));"
+        f"CREATE TABLE IF NOT EXISTS {config.sql.auth}.userinfo (user_id character varying(1000), email text unique, name character varying(1000), given_name character varying(1000), token character varying(1000),unique(email));"
     )
     session.commit()
     session.close()

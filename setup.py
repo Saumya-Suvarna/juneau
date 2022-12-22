@@ -55,7 +55,8 @@ setup(
         "usaddress",
         "google-api-python-client",
         "google-auth-oauthlib==0.5.3",
-        "requests"
+        "requests",
+        "datetime"
     ],
     extras_require={
         "dev": [
